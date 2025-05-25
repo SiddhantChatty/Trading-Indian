@@ -6,11 +6,10 @@ import ta
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LinearRegression
 import os
-
 from dotenv import load_dotenv
-load_dotenv()  # Load variables from .env file
 
-# Load login credentials from environment variables (secrets)
+load_dotenv()
+
 VALID_EMAIL = os.getenv("VALID_EMAIL")
 VALID_PASSCODE = os.getenv("VALID_PASSCODE")
 
@@ -41,18 +40,17 @@ def generate_signal(df, model):
     latest = df.iloc[-1:]
     features = ['SMA_20', 'RSI', 'MACD', 'Return']
     prediction = model.predict(latest[features])[0]
-    signal = 'BUY' if prediction == 1 else 'SELL'
-    return signal
+    return 'BUY' if prediction == 1 else 'SELL'
 
 def forecast_target_and_stoploss(df):
     df = df.copy()
     df['Days'] = np.arange(len(df))
     model = LinearRegression()
     model.fit(df[['Days']], df['Close'])
-    future_days = 60  # ~3 months
+    future_days = 60
     future_price = model.predict([[len(df) + future_days]])[0]
     current_price = df.iloc[-1]['Close']
-    stop_loss = current_price * 0.95  # 5% below current
+    stop_loss = current_price * 0.95
     target = future_price
     return round(stop_loss, 2), round(target, 2)
 
@@ -76,68 +74,78 @@ def scan_top_stocks(stock_list):
             continue
     return pd.DataFrame(suggestions)
 
+def display_custom_section(title, stock_list):
+    st.subheader(title)
+    result_df = scan_top_stocks(stock_list)
+    if not result_df.empty:
+        st.dataframe(result_df)
+    else:
+        st.info(f"No strong BUY signals in the {title} list.")
+
 def main_app():
-    st.title("📈 Indian Stock Market AI Trading Bot - 10 Year Analysis")
+    st.title("📈 Indian AI Trading Bot – NSE 10-Year Analyzer")
+    symbol = st.sidebar.text_input("📌 Enter NSE Symbol (e.g., RELIANCE):", "RELIANCE")
+    capital = st.sidebar.number_input("💰 Enter Your Capital (₹):", min_value=1000, value=10000)
+    run_btn = st.sidebar.button("▶️ Run Analysis")
+    suggest_btn = st.sidebar.button("🔥 Suggest Top Stocks")
+    low_perf_btn = st.sidebar.button("📉 Scan Low-Performing Picks")
+    ipo_btn = st.sidebar.button("🆕 New IPO Watchlist")
 
-    symbol = st.sidebar.text_input("Enter NSE Stock Symbol (e.g., RELIANCE):", "RELIANCE")
-    capital = st.sidebar.number_input("Enter Your Capital (₹):", min_value=1000, value=10000)
-    run_bot = st.sidebar.button("Run Analysis")
-    suggest_btn = st.sidebar.button("Suggest Top Stocks")
-
-    if run_bot:
+    if run_btn:
         try:
             df = fetch_nse_data(symbol)
             df = generate_features(df)
-
             model = train_model(df)
             signal = generate_signal(df, model)
             stop_loss, target = forecast_target_and_stoploss(df)
-
             current_price = df.iloc[-1]['Close']
             quantity = int(capital // current_price)
 
-            st.header(f"Signal for {symbol}: {signal}")
-            st.markdown(f"**Suggested Stop-Loss:** ₹{stop_loss}")
-            st.markdown(f"**Target in 1-3 Months:** ₹{target}")
+            st.header(f"🔍 Analysis for: {symbol}")
+            st.markdown(f"**Signal:** `{signal}`")
             st.markdown(f"**Current Price:** ₹{round(current_price, 2)}")
+            st.markdown(f"**Target Price (3 months):** ₹{target}")
+            st.markdown(f"**Stop-Loss:** ₹{stop_loss}")
+
             if signal == 'BUY':
-                st.success(f"You can buy **{quantity} shares** with ₹{capital}")
+                st.success(f"✅ Suggestion: Buy **{quantity} shares** with ₹{capital}")
             else:
-                st.warning("Consider selling if you already hold this stock.")
+                st.warning("⚠️ Suggestion: Hold or Sell")
 
-            st.subheader("📊 Last 10 Days of Data")
-            st.dataframe(df.tail(10))
-
-            st.subheader("📉 10-Year Historical Close Prices")
+            st.subheader("📊 Historical Close Price (10 Years)")
             st.line_chart(df.set_index("Date")["Close"])
 
-            st.subheader("🧠 Model Features Over Time")
+            st.subheader("📈 Indicators Over Time")
             st.line_chart(df.set_index("Date")[['SMA_20', 'RSI', 'MACD']].dropna())
+
+            st.subheader("🗂️ Last 10 Days of Data")
+            st.dataframe(df.tail(10))
 
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
     if suggest_btn:
         top_stocks = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "AXISBANK", "SBIN", "LT", "ITC", "HINDUNILVR"]
-        st.subheader("📌 Weekly BUY Suggestions")
-        suggestions_df = scan_top_stocks(top_stocks)
-        if not suggestions_df.empty:
-            st.dataframe(suggestions_df)
-        else:
-            st.info("No strong BUY signals detected in the top stocks right now.")
+        display_custom_section("🔥 Weekly Top Stock Suggestions", top_stocks)
+
+    if low_perf_btn:
+        underdogs = ["WAAREE", "IDEA", "YESBANK", "JPPOWER", "SUZLON", "IRCTC", "ZOMATO"]
+        display_custom_section("📉 Low-Performing But Potential Gainers", underdogs)
+
+    if ipo_btn:
+        ipo_list = ["TATAELXSI", "MOBIKWIK", "NYKAA", "PAYTM", "DELHIVERY"]
+        display_custom_section("🆕 Trending IPOs", ipo_list)
 
 def login():
-    st.title("🔐 Login to Indian Stock Market AI Bot")
-    email = st.text_input("Enter your Gmail ID:")
-    password = st.text_input("Enter your Passcode:", type="password")
-    login_button = st.button("Login")
-
-    if login_button:
+    st.title("🔐 Login to Access AI Bot")
+    email = st.text_input("📧 Gmail ID:")
+    password = st.text_input("🔑 Passcode:", type="password")
+    if st.button("Login"):
         if email == VALID_EMAIL and password == VALID_PASSCODE:
-            st.success("Login successful!")
+            st.success("Login successful ✅")
             st.session_state['logged_in'] = True
         else:
-            st.error("Invalid email or passcode.")
+            st.error("❌ Invalid login credentials")
 
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
@@ -146,3 +154,4 @@ if st.session_state['logged_in']:
     main_app()
 else:
     login()
+
